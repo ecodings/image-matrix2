@@ -57,6 +57,14 @@
             box-shadow: 0 5px 15px rgba(255, 107, 107, 0.4);
         }
         
+        .btn-reset {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .btn-reset:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #653a8e 100%);
+        }
+        
         input[type="file"] {
             display: none;
         }
@@ -79,17 +87,40 @@
         
         .canvas-wrapper {
             position: relative;
-            display: inline-block;
             border: 3px solid #ddd;
             border-radius: 10px;
             overflow: hidden;
             background: #f5f5f5;
+            min-height: 300px;
+            width: 100%;
+        }
+        
+        .canvas-wrapper.empty {
+            background: repeating-linear-gradient(
+                45deg,
+                #f0f0f0,
+                #f0f0f0 10px,
+                #e0e0e0 10px,
+                #e0e0e0 20px
+            );
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .canvas-wrapper canvas {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+        
+        .placeholder {
+            color: #999;
+            font-size: 14px;
+            padding: 20px;
         }
         
         canvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
             cursor: crosshair;
         }
         
@@ -290,21 +321,26 @@
             <button class="btn" onclick="loadSampleImage()">
                 🖼️ 샘플 이미지 사용
             </button>
+            <button class="btn btn-reset" onclick="resetAll()">
+                🔄 초기화
+            </button>
         </div>
         
         <div class="images-container">
             <div class="image-box">
                 <h3>원본 이미지</h3>
-                <div class="canvas-wrapper" id="originalWrapper">
-                    <canvas id="originalCanvas"></canvas>
+                <div class="canvas-wrapper empty" id="originalWrapper">
+                    <canvas id="originalCanvas" style="display: none;"></canvas>
                     <div class="selection-box" id="selectionBox1"></div>
+                    <div class="placeholder" id="placeholder1">이미지를 업로드하세요</div>
                 </div>
             </div>
             <div class="image-box">
                 <h3>변환된 이미지 (R×s, G×s, B×s)</h3>
-                <div class="canvas-wrapper" id="transformedWrapper">
-                    <canvas id="transformedCanvas"></canvas>
+                <div class="canvas-wrapper empty" id="transformedWrapper">
+                    <canvas id="transformedCanvas" style="display: none;"></canvas>
                     <div class="selection-box" id="selectionBox2"></div>
+                    <div class="placeholder" id="placeholder2">이미지를 업로드하세요</div>
                 </div>
             </div>
         </div>
@@ -316,10 +352,11 @@
                     <span id="sValue">1.0</span>
                 </div>
                 <input type="range" id="contrastSlider" min="0" max="30" value="10" step="1">
-                <div style="display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 5px;">
-                    <span>0.0 (완전 어두움)</span>
-                    <span>1.0 (원본)</span>
-                    <span>3.0 (매우 밝음)</span>
+                <div style="display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-top: 5px; padding: 0 2px;">
+                    <span>0</span>
+                    <span>1</span>
+                    <span>2</span>
+                    <span>3</span>
                 </div>
             </div>
             <div class="formula" id="formula">
@@ -374,7 +411,7 @@
             </div>
             
             <div class="info-box warning" id="clippingWarning" style="display: none;">
-                <strong>⚠️ 클리핑 발생:</strong> <span id="clippingCount"></span>
+                <strong>⚠️ 클리핑 발생:</strong> <span id="clippingCount"></span>개 픽셀이 255로 포화되었습니다.
             </div>
         </div>
     </div>
@@ -390,6 +427,50 @@
         const originalCtx = originalCanvas.getContext('2d');
         const transformedCtx = transformedCanvas.getContext('2d');
         const slider = document.getElementById('contrastSlider');
+        
+        // 초기화 함수
+        function resetAll() {
+            // 이미지 데이터 초기화
+            originalImageData = null;
+            selectedX = null;
+            selectedY = null;
+            
+            // 캔버스 숨기기
+            document.getElementById('originalCanvas').style.display = 'none';
+            document.getElementById('transformedCanvas').style.display = 'none';
+            
+            // placeholder 보이기
+            document.getElementById('placeholder1').style.display = 'block';
+            document.getElementById('placeholder2').style.display = 'block';
+            
+            // wrapper에 empty 클래스 추가
+            document.getElementById('originalWrapper').classList.add('empty');
+            document.getElementById('transformedWrapper').classList.add('empty');
+            
+            // 선택 박스 숨기기
+            document.getElementById('selectionBox1').style.display = 'none';
+            document.getElementById('selectionBox2').style.display = 'none';
+            
+            // 슬라이더 초기화
+            slider.value = 10;
+            document.getElementById('sValue').textContent = '1.0';
+            document.getElementById('formula').textContent = 
+                '수식: R_new = R × 1.0, G_new = G × 1.0, B_new = B × 1.0';
+            
+            // 행렬 테이블 초기화
+            ['R', 'G', 'B'].forEach(ch => {
+                document.getElementById('originalMatrix' + ch).innerHTML = '';
+                document.getElementById('transformedMatrix' + ch).innerHTML = '';
+            });
+            
+            // 정보 박스 숨기기
+            document.getElementById('exampleCalc').style.display = 'none';
+            document.getElementById('contrastInfo').style.display = 'none';
+            document.getElementById('clippingWarning').style.display = 'none';
+            
+            // 파일 입력 초기화
+            document.getElementById('imageInput').value = '';
+        }
         
         // 이미지 업로드
         document.getElementById('imageInput').addEventListener('change', function(e) {
@@ -413,7 +494,7 @@
             img.onload = function() {
                 loadImage(img);
             };
-            img.src = 'sample.jpg';  // 같은 폴더에 있는 sample.jpg 불러오기
+            img.src = 'sample.jpg';
         }
         
         function loadImage(img) {
@@ -429,6 +510,17 @@
             
             originalCtx.drawImage(img, 0, 0, width, height);
             originalImageData = originalCtx.getImageData(0, 0, width, height);
+            
+            // 캔버스 보이기, placeholder 숨기기
+            document.getElementById('originalCanvas').style.display = 'block';
+            document.getElementById('transformedCanvas').style.display = 'block';
+            
+            document.getElementById('placeholder1').style.display = 'none';
+            document.getElementById('placeholder2').style.display = 'none';
+            
+            // wrapper에서 empty 클래스 제거
+            document.getElementById('originalWrapper').classList.remove('empty');
+            document.getElementById('transformedWrapper').classList.remove('empty');
             
             updateTransformedImage();
         }
@@ -450,10 +542,10 @@
             const imageData = transformedCtx.createImageData(originalImageData.width, originalImageData.height);
             
             for (let i = 0; i < originalImageData.data.length; i += 4) {
-                imageData.data[i] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i] * s)));     // R
-                imageData.data[i + 1] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i + 1] * s))); // G
-                imageData.data[i + 2] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i + 2] * s))); // B
-                imageData.data[i + 3] = originalImageData.data[i + 3]; // A
+                imageData.data[i] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i] * s)));
+                imageData.data[i + 1] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i + 1] * s)));
+                imageData.data[i + 2] = Math.min(255, Math.max(0, Math.round(originalImageData.data[i + 2] * s)));
+                imageData.data[i + 3] = originalImageData.data[i + 3];
             }
             
             transformedCtx.putImageData(imageData, 0, 0);
@@ -468,8 +560,12 @@
         function setupClickEvent(canvas) {
             canvas.addEventListener('click', function(e) {
                 const rect = canvas.getBoundingClientRect();
-                selectedX = Math.floor((e.clientX - rect.left) * (canvas.width / rect.width));
-                selectedY = Math.floor((e.clientY - rect.top) * (canvas.height / rect.height));
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                selectedX = Math.floor((e.clientX - rect.left) * scaleX);
+                selectedY = Math.floor((e.clientY - rect.top) * scaleY);
+                
                 updateMatrix();
                 updateSelectionBoxes();
             });
@@ -485,25 +581,21 @@
             const startX = Math.max(0, Math.min(originalImageData.width - boxSize, selectedX - Math.floor(boxSize / 2)));
             const startY = Math.max(0, Math.min(originalImageData.height - boxSize, selectedY - Math.floor(boxSize / 2)));
             
-            // 원본 이미지 박스
-            const rect1 = originalCanvas.getBoundingClientRect();
-            const scale1 = rect1.width / originalCanvas.width;
-            const box1 = document.getElementById('selectionBox1');
-            box1.style.display = 'block';
-            box1.style.left = (startX * scale1) + 'px';
-            box1.style.top = (startY * scale1) + 'px';
-            box1.style.width = (boxSize * scale1) + 'px';
-            box1.style.height = (boxSize * scale1) + 'px';
+            const canvases = [originalCanvas, transformedCanvas];
+            const boxes = ['selectionBox1', 'selectionBox2'];
             
-            // 변환 이미지 박스
-            const rect2 = transformedCanvas.getBoundingClientRect();
-            const scale2 = rect2.width / transformedCanvas.width;
-            const box2 = document.getElementById('selectionBox2');
-            box2.style.display = 'block';
-            box2.style.left = (startX * scale2) + 'px';
-            box2.style.top = (startY * scale2) + 'px';
-            box2.style.width = (boxSize * scale2) + 'px';
-            box2.style.height = (boxSize * scale2) + 'px';
+            canvases.forEach((canvas, idx) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = rect.width / canvas.width;
+                const scaleY = rect.height / canvas.height;
+                
+                const box = document.getElementById(boxes[idx]);
+                box.style.display = 'block';
+                box.style.left = (startX * scaleX) + 'px';
+                box.style.top = (startY * scaleY) + 'px';
+                box.style.width = (boxSize * scaleX) + 'px';
+                box.style.height = (boxSize * scaleY) + 'px';
+            });
         }
         
         // 행렬 업데이트
@@ -521,7 +613,6 @@
             let centerR = null, centerG = null, centerB = null;
             let centerRTransformed = null, centerGTransformed = null, centerBTransformed = null;
             
-            // 각 채널별로 HTML 생성
             const channels = ['R', 'G', 'B'];
             
             for (let ch = 0; ch < 3; ch++) {
@@ -539,7 +630,7 @@
                         const originalValue = originalImageData.data[index];
                         const calculatedValue = Math.round(originalValue * s);
                         const transformedValue = Math.min(255, Math.max(0, calculatedValue));
-                        const isClipped = (calculatedValue > 255 || calculatedValue < 0);
+                        const isClipped = (calculatedValue > 255);
                         const isCenter = (y === centerRow && x === centerCol);
                         
                         if (isClipped) clippingCount++;
@@ -590,7 +681,7 @@
                 document.getElementById('contrastInfo').style.display = 'block';
                 if (s > 1.0) {
                     document.getElementById('contrastText').textContent = 
-                        `밝은 부분이 더 밝아지고, 어두운 부분도 밝아지지만 상대적으로 밝은 부분의 변화가 큽니다. (명암 대비 증가)`;
+                        `전체적으로 밝아지되, 밝은 부분은 훨씬 더 밝아지고 어두운 부분은 조금만 밝아져서 명암의 차이가 더 뚜렷해집니다.`;
                 } else {
                     document.getElementById('contrastText').textContent = 
                         `모든 부분이 어두워지며, 원래 밝았던 부분이 더 많이 어두워집니다. (명암 대비 유지하며 전체 어두움)`;
@@ -607,11 +698,6 @@
                 document.getElementById('clippingWarning').style.display = 'none';
             }
         }
-        
-        // 초기 샘플 이미지 로드
-        window.onload = function() {
-            loadSampleImage();
-        };
     </script>
 </body>
 </html>
