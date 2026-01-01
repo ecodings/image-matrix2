@@ -177,6 +177,12 @@
             margin-bottom: 20px;
         }
         
+        .matrix-column {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
         .matrix-box {
             background: white;
             padding: 15px;
@@ -184,10 +190,35 @@
             border: 2px solid #ffcdd2;
         }
         
+        .matrix-box.r-channel {
+            border-color: #ffcdd2;
+        }
+        
+        .matrix-box.g-channel {
+            border-color: #c8e6c9;
+        }
+        
+        .matrix-box.b-channel {
+            border-color: #bbdefb;
+        }
+        
         .matrix-box h4 {
             margin-bottom: 10px;
             color: #555;
             font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .matrix-box.r-channel h4 {
+            color: #d32f2f;
+        }
+        
+        .matrix-box.g-channel h4 {
+            color: #388e3c;
+        }
+        
+        .matrix-box.b-channel h4 {
+            color: #1976d2;
         }
         
         .matrix-table {
@@ -214,27 +245,6 @@
             background: #ffebee;
             color: #d32f2f;
             font-weight: bold;
-        }
-        
-        .channel-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        
-        .channel-tab {
-            padding: 8px 16px;
-            background: #e0e0e0;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-        
-        .channel-tab.active {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
-            color: white;
         }
         
         .info-box {
@@ -318,25 +328,40 @@
         </div>
         
         <div class="matrix-section">
-            <h3>📊 선택된 영역의 11×11 행렬 값</h3>
+            <h3>📊 선택된 영역의 11×11 행렬 값 (R, G, B 전체)</h3>
             <p style="color: #666; margin-bottom: 15px;">
-                💡 이미지를 클릭하면 해당 픽셀을 중심으로 11×11 영역의 행렬 값을 확인할 수 있습니다. (중앙 셀은 노란색으로 표시됩니다)
+                💡 이미지를 클릭하면 해당 픽셀을 중심으로 11×11 영역의 RGB 행렬 값을 모두 확인할 수 있습니다. (중앙 셀은 노란색으로 표시됩니다)
             </p>
             
-            <div class="channel-tabs">
-                <button class="channel-tab active" onclick="changeChannel('R')">R 채널</button>
-                <button class="channel-tab" onclick="changeChannel('G')">G 채널</button>
-                <button class="channel-tab" onclick="changeChannel('B')">B 채널</button>
-            </div>
-            
             <div class="matrix-grid">
-                <div class="matrix-box">
-                    <h4>원본 <span id="channelName1">R</span> 채널</h4>
-                    <table class="matrix-table" id="originalMatrix"></table>
+                <div class="matrix-column">
+                    <div class="matrix-box r-channel">
+                        <h4>원본 R 채널</h4>
+                        <table class="matrix-table" id="originalMatrixR"></table>
+                    </div>
+                    <div class="matrix-box g-channel">
+                        <h4>원본 G 채널</h4>
+                        <table class="matrix-table" id="originalMatrixG"></table>
+                    </div>
+                    <div class="matrix-box b-channel">
+                        <h4>원본 B 채널</h4>
+                        <table class="matrix-table" id="originalMatrixB"></table>
+                    </div>
                 </div>
-                <div class="matrix-box">
-                    <h4>변환 후 <span id="channelName2">R</span> 채널</h4>
-                    <table class="matrix-table" id="transformedMatrix"></table>
+                
+                <div class="matrix-column">
+                    <div class="matrix-box r-channel">
+                        <h4>변환 후 R 채널</h4>
+                        <table class="matrix-table" id="transformedMatrixR"></table>
+                    </div>
+                    <div class="matrix-box g-channel">
+                        <h4>변환 후 G 채널</h4>
+                        <table class="matrix-table" id="transformedMatrixG"></table>
+                    </div>
+                    <div class="matrix-box b-channel">
+                        <h4>변환 후 B 채널</h4>
+                        <table class="matrix-table" id="transformedMatrixB"></table>
+                    </div>
                 </div>
             </div>
             
@@ -349,14 +374,13 @@
             </div>
             
             <div class="info-box warning" id="clippingWarning" style="display: none;">
-                <strong>⚠️ 클리핑 발생:</strong> <span id="clippingCount"></span>개 픽셀이 255로 포화되었습니다.
+                <strong>⚠️ 클리핑 발생:</strong> <span id="clippingCount"></span>
             </div>
         </div>
     </div>
 
     <script>
         let originalImageData = null;
-        let currentChannel = 'R';
         let selectedX = null;
         let selectedY = null;
         const boxSize = 11;
@@ -389,35 +413,7 @@
             img.onload = function() {
                 loadImage(img);
             };
-            // 명암 차이가 있는 샘플 이미지 생성
-            const canvas = document.createElement('canvas');
-            canvas.width = 200;
-            canvas.height = 200;
-            const ctx = canvas.getContext('2d');
-            
-            // 그라데이션과 패턴이 있는 이미지
-            for (let y = 0; y < 200; y++) {
-                for (let x = 0; x < 200; x++) {
-                    let value;
-                    if (x < 100 && y < 100) {
-                        // 왼쪽 위: 어두운 영역
-                        value = Math.floor(50 + x * 0.5);
-                    } else if (x >= 100 && y < 100) {
-                        // 오른쪽 위: 중간 밝기
-                        value = Math.floor(100 + (x - 100) * 1.0);
-                    } else if (x < 100 && y >= 100) {
-                        // 왼쪽 아래: 중간 밝기
-                        value = Math.floor(100 + x * 0.8);
-                    } else {
-                        // 오른쪽 아래: 밝은 영역
-                        value = Math.floor(150 + (x - 100) * 0.5);
-                    }
-                    ctx.fillStyle = `rgb(${value},${value},${value})`;
-                    ctx.fillRect(x, y, 1, 1);
-                }
-            }
-            
-            img.src = canvas.toDataURL();
+            img.src = 'sample.jpg';  // 같은 폴더에 있는 sample.jpg 불러오기
         }
         
         function loadImage(img) {
@@ -518,57 +514,75 @@
             const startX = Math.max(0, Math.min(originalImageData.width - boxSize, selectedX - Math.floor(boxSize / 2)));
             const startY = Math.max(0, Math.min(originalImageData.height - boxSize, selectedY - Math.floor(boxSize / 2)));
             
-            const channelOffset = currentChannel === 'R' ? 0 : currentChannel === 'G' ? 1 : 2;
-            
-            let originalHTML = '';
-            let transformedHTML = '';
-            let clippingCount = 0;
-            let centerOriginal = null;
-            let centerTransformed = null;
             const centerRow = Math.floor(boxSize / 2);
             const centerCol = Math.floor(boxSize / 2);
             
-            for (let y = 0; y < boxSize; y++) {
-                originalHTML += '<tr>';
-                transformedHTML += '<tr>';
-                for (let x = 0; x < boxSize; x++) {
-                    const pixelX = Math.floor(startX + x);
-                    const pixelY = Math.floor(startY + y);
-                    const index = (pixelY * originalImageData.width + pixelX) * 4 + channelOffset;
-                    
-                    const originalValue = originalImageData.data[index];
-                    const calculatedValue = Math.round(originalValue * s);
-                    const transformedValue = Math.min(255, Math.max(0, calculatedValue));
-                    const isClipped = (calculatedValue > 255 || calculatedValue < 0);
-                    const isCenter = (y === centerRow && x === centerCol);
-                    
-                    if (isClipped) clippingCount++;
-                    
-                    if (isCenter) {
-                        centerOriginal = originalValue;
-                        centerTransformed = transformedValue;
+            let clippingCount = 0;
+            let centerR = null, centerG = null, centerB = null;
+            let centerRTransformed = null, centerGTransformed = null, centerBTransformed = null;
+            
+            // 각 채널별로 HTML 생성
+            const channels = ['R', 'G', 'B'];
+            
+            for (let ch = 0; ch < 3; ch++) {
+                let originalHTML = '';
+                let transformedHTML = '';
+                
+                for (let y = 0; y < boxSize; y++) {
+                    originalHTML += '<tr>';
+                    transformedHTML += '<tr>';
+                    for (let x = 0; x < boxSize; x++) {
+                        const pixelX = Math.floor(startX + x);
+                        const pixelY = Math.floor(startY + y);
+                        const index = (pixelY * originalImageData.width + pixelX) * 4 + ch;
+                        
+                        const originalValue = originalImageData.data[index];
+                        const calculatedValue = Math.round(originalValue * s);
+                        const transformedValue = Math.min(255, Math.max(0, calculatedValue));
+                        const isClipped = (calculatedValue > 255 || calculatedValue < 0);
+                        const isCenter = (y === centerRow && x === centerCol);
+                        
+                        if (isClipped) clippingCount++;
+                        
+                        if (isCenter) {
+                            if (ch === 0) {
+                                centerR = originalValue;
+                                centerRTransformed = transformedValue;
+                            } else if (ch === 1) {
+                                centerG = originalValue;
+                                centerGTransformed = transformedValue;
+                            } else {
+                                centerB = originalValue;
+                                centerBTransformed = transformedValue;
+                            }
+                        }
+                        
+                        let className = '';
+                        if (isCenter) className = 'center-cell';
+                        else if (isClipped) className = 'clipped';
+                        
+                        originalHTML += `<td class="${isCenter ? 'center-cell' : ''}">${originalValue}</td>`;
+                        transformedHTML += `<td class="${className}">${transformedValue}</td>`;
                     }
-                    
-                    let className = '';
-                    if (isCenter) className = 'center-cell';
-                    else if (isClipped) className = 'clipped';
-                    
-                    originalHTML += `<td class="${isCenter ? 'center-cell' : ''}">${originalValue}</td>`;
-                    transformedHTML += `<td class="${className}">${transformedValue}</td>`;
+                    originalHTML += '</tr>';
+                    transformedHTML += '</tr>';
                 }
-                originalHTML += '</tr>';
-                transformedHTML += '</tr>';
+                
+                document.getElementById('originalMatrix' + channels[ch]).innerHTML = originalHTML;
+                document.getElementById('transformedMatrix' + channels[ch]).innerHTML = transformedHTML;
             }
             
-            document.getElementById('originalMatrix').innerHTML = originalHTML;
-            document.getElementById('transformedMatrix').innerHTML = transformedHTML;
-            
             // 계산 예시
-            if (centerOriginal !== null) {
+            if (centerR !== null) {
                 document.getElementById('exampleCalc').style.display = 'block';
-                const calculated = Math.round(centerOriginal * s);
+                const calculatedR = Math.round(centerR * s);
+                const calculatedG = Math.round(centerG * s);
+                const calculatedB = Math.round(centerB * s);
                 document.getElementById('calcExample').textContent = 
-                    `${currentChannel}[중앙] = ${centerOriginal} × ${s.toFixed(1)} = ${calculated}${calculated !== centerTransformed ? ' → ' + centerTransformed + ' (클리핑)' : ''}`;
+                    `RGB[중앙] = (${centerR}, ${centerG}, ${centerB}) × ${s.toFixed(1)} = (${calculatedR}, ${calculatedG}, ${calculatedB})` +
+                    (calculatedR !== centerRTransformed || calculatedG !== centerGTransformed || calculatedB !== centerBTransformed 
+                        ? ` → (${centerRTransformed}, ${centerGTransformed}, ${centerBTransformed}) (클리핑)` 
+                        : '');
             }
             
             // 명암 대비 정보
@@ -592,16 +606,6 @@
             } else {
                 document.getElementById('clippingWarning').style.display = 'none';
             }
-        }
-        
-        // 채널 변경
-        function changeChannel(channel) {
-            currentChannel = channel;
-            document.querySelectorAll('.channel-tab').forEach(tab => tab.classList.remove('active'));
-            event.target.classList.add('active');
-            document.getElementById('channelName1').textContent = channel;
-            document.getElementById('channelName2').textContent = channel;
-            updateMatrix();
         }
         
         // 초기 샘플 이미지 로드
